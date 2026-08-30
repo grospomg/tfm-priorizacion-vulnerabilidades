@@ -1,0 +1,290 @@
+{
+  "name": "02 - Ingesta CISA KEV",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "95051541-c43b-498d-bb00-becfc44e418c",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "deed39c6-1aad-4fb7-9e08-d46979c1b6e2",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst vulnerabilities = items[0].json.vulnerabilities;\nreturn vulnerabilities.map(vuln => {\n  return {\n    json: {\n      cve_id: vuln.cveID,\n      fabricante: vuln.vendorProject || 'N/A',\n      producto: vuln.product || 'N/A',\n      nombre_vuln: vuln.vulnerabilityName || 'N/A',\n      fecha_anadido_kev: vuln.dateAdded || 'N/A',\n      descripcion_kev: vuln.shortDescription || '',\n      accion_requerida: vuln.requiredAction || 'N/A',\n      fecha_limite: vuln.dueDate || 'N/A',\n      explotada_activamente: 'SI',\n      fuente: 'CISA-KEV'\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "6f187a63-94ff-438c-b7c2-29c6844ee21d",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "7sWlDiI3ye0JZKkr",
+          "mode": "list",
+          "cachedResultName": "vulnerabilidades",
+          "cachedResultUrl": "/projects/XdKyeWZmm9eI2Hwk/datatables/7sWlDiI3ye0JZKkr"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "cve_id",
+              "keyValue": "={{ $json.cve_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "explotada_activamente": "={{ $json.explotada_activamente }}",
+            "fecha_limite_kev": "={{ $json.fecha_limite }}",
+            "fabricante": "={{ $json.fabricante }}",
+            "producto": "={{ $json.producto }}",
+            "cve_id": "={{ $json.cve_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "cve_id",
+              "displayName": "cve_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_publicacion",
+              "displayName": "fecha_publicacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "fecha_modificacion",
+              "displayName": "fecha_modificacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "descripcion_en",
+              "displayName": "descripcion_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "descripcion_es",
+              "displayName": "descripcion_es",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "cvss_version",
+              "displayName": "cvss_version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "cvss_score",
+              "displayName": "cvss_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "cvss_severidad",
+              "displayName": "cvss_severidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "vector_ataque",
+              "displayName": "vector_ataque",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "fuente",
+              "displayName": "fuente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "explotada_activamente",
+              "displayName": "explotada_activamente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_limite_kev",
+              "displayName": "fecha_limite_kev",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fabricante",
+              "displayName": "fabricante",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "producto",
+              "displayName": "producto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        624,
+        0
+      ],
+      "id": "02562ee9-f7ca-4efe-b773-c000648f0de8",
+      "name": "Upsert row(s)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Upsert row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a756fe53-454d-44ca-b6f3-5469f7c42bb6",
+  "meta": {
+    "instanceId": "75aadc027b3f989d0b06d7f1bf22776938771ecad4424597ad591f6d6e60303b"
+  },
+  "id": "b7TVM3XX4hhwRSB5",
+  "tags": []
+}

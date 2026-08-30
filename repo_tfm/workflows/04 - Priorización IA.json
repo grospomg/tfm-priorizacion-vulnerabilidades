@@ -1,0 +1,316 @@
+{
+  "name": "04 - Priorización IA",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a1c5e05e-adce-423f-bc05-fb2cb090bb5f",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "c9781e10-6dff-487f-b08b-16d8fdba833d",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst perfilOrganizacion = `\nEres un analista de ciberseguridad experto en gestión de vulnerabilidades. Tu tarea es analizar un conjunto de vulnerabilidades CVE y generar una priorización adaptada al contexto de negocio de la organización.\n\nCONTEXTO DE LA ORGANIZACIÓN — BancaSegura S.A.:\nBanco online mediano, 800 empleados, operaciones en España y Portugal. Regulado por Banco de España, sujeto a DORA y NIS2.\n\nGRUPOS Y TECNOLOGÍAS (cada grupo tiene una criticidad asignada):\n\nGRUPO 1 - Infraestructura [Criticidad: ALTA]\n- VMware vSphere 7.0, ESXi 7.0\n- Windows Server 2019/2022, Red Hat Enterprise Linux 8\n- Cisco IOS 15.x, Cisco ASA 9.x, F5 BIG-IP 16.x\n- Palo Alto GlobalProtect 5.x, Veeam Backup 11\n\nGRUPO 2 - Base de datos [Criticidad: CRÍTICA]\n- Oracle Database 19c, PostgreSQL 14\n- Microsoft SQL Server 2019, Redis 7.x\n\nGRUPO 3 - Desarrollo y aplicaciones web [Criticidad: ALTA]\n- Apache 2.4.51, Nginx 1.22\n- PHP 8.1, Java 11 (Spring Boot 2.7), Node.js 18.x\n- WordPress 6.x\n\nGRUPO 4 - Endpoint y puesto de trabajo [Criticidad: MEDIA]\n- Windows 10/11 Enterprise, Microsoft Office 365\n- Google Chrome, Mozilla Firefox, CrowdStrike Falcon\n\nGRUPO 5 - Identidad y acceso [Criticidad: CRÍTICA]\n- Microsoft Active Directory, Azure AD / Entra ID\n- CyberArk PAM 12.x, Okta SSO\n\nGRUPO 6 - Servicios en la nube [Criticidad: ALTA]\n- Azure IaaS/PaaS, AWS S3, Cloudflare CDN\n\nINSTRUCCIONES DE SCORING:\n1. Toma como base el CVSS Score (si existe) y el EPSS Score de cada vulnerabilidad.\n2. Si no hay CVSS ni descripción disponible, basa tu análisis en: explotación activa confirmada, EPSS score, y fabricante/producto afectado.\n3. Ajusta la prioridad según la criticidad del grupo al que afecta la tecnología (usa el campo fabricante/producto para inferir el grupo).\n4. Si está marcada como explotada activamente, sube siempre la prioridad al máximo, independientemente de si hay CVSS o no.\n5. Genera un score_final entre 0 y 10 que refleje la prioridad real ajustada al contexto.\n`;\n\nconst cves = items.map(item => {\n  const d = item.json;\n  const tieneDescripcion = d.descripcion_en && d.descripcion_en.trim() !== '';\n  \n  return `CVE: ${d.cve_id}\n${tieneDescripcion ? `Descripcion: ${d.descripcion_en}` : 'Descripcion: NO DISPONIBLE (CVE historico, ver fabricante/producto)'}\n${d.cvss_score ? `CVSS Score: ${d.cvss_score} (${d.cvss_severidad})` : 'CVSS Score: NO DISPONIBLE'}\n${d.vector_ataque ? `Vector de ataque: ${d.vector_ataque}` : ''}\nEPSS Score: ${d.epss_score || 'N/A'}\nExplotada activamente: ${d.explotada_activamente || 'NO'}\nFabricante/Producto: ${d.fabricante || 'N/A'} / ${d.producto || 'N/A'}`;\n}).join('\\n\\n');\n\nconst prompt = `${perfilOrganizacion}\n\nVULNERABILIDADES A ANALIZAR:\n${cves}\n\nResponde UNICAMENTE con un JSON array con esta estructura exacta, sin texto adicional:\n[{\"cve_id\":\"CVE-XXXX-XXXX\",\"grupo\":\"Grupo afectado o DESCONOCIDO\",\"score_final\":8.5,\"prioridad\":\"CRITICA/ALTA/MEDIA/BAJA\",\"justificacion\":\"Una frase explicando la prioridad\"}]`;\n\nreturn [{ json: { model: \"qwen2.5:7b\", prompt: prompt, stream: false, format: \"json\" } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        208
+      ],
+      "id": "0605c58d-31a8-42c6-8737-dd673ed52803",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.1:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $json.model }}"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            },
+            {
+              "name": "stream",
+              "value": "={{ $json.stream }}"
+            },
+            {
+              "name": "format",
+              "value": "={{ $json.format }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 3600000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        208
+      ],
+      "id": "ab9d4d2b-0f21-4a49-9176-b15d660bfeae",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cve_id, descripcion_en, cvss_score, cvss_severidad, vector_ataque, epss_score, explotada_activamente, fabricante, producto\nFROM \"data_table_user_7sWlDiI3ye0JZKkr\"\nWHERE explotada_activamente = 'SI' AND CAST(epss_score AS NUMERIC) > 0.5\nORDER BY CAST(epss_score AS NUMERIC) DESC\nLIMIT 15",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "ca033e85-c106-47ef-89f0-c7d54ad46e36",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "1m4PHwiEBOPMGFHo",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const responseText = item.json.response;\n  const parsed = JSON.parse(responseText);\n  \n  // Normalizar el campo grupo a mayúsculas consistentes\n  if (parsed.grupo) {\n    parsed.grupo = parsed.grupo.toUpperCase();\n  }\n  \n  // Normalizar prioridad a mayúsculas\n  if (parsed.prioridad) {\n    parsed.prioridad = parsed.prioridad.toUpperCase();\n  }\n  \n  return { json: parsed };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        208
+      ],
+      "id": "1d7a1488-7c75-4e58-aee5-3dc0f9b6a833",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "priorizacion_ia",
+          "mode": "list",
+          "cachedResultName": "priorizacion_ia"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "id": 0
+          },
+          "matchingColumns": [
+            "cve_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cve_id",
+              "displayName": "cve_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "grupo",
+              "displayName": "grupo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "score_final",
+              "displayName": "score_final",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "prioridad",
+              "displayName": "prioridad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "justificacion",
+              "displayName": "justificacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "fecha_analisis",
+              "displayName": "fecha_analisis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1408,
+        208
+      ],
+      "id": "33c86806-1361-4895-81ef-0cee3625a96f",
+      "name": "Insert or update rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "1m4PHwiEBOPMGFHo",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Insert or update rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "fb44a5ab-3840-408d-be4f-91683e14e505",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75aadc027b3f989d0b06d7f1bf22776938771ecad4424597ad591f6d6e60303b"
+  },
+  "id": "1LfJk8GAUAv9zmwA",
+  "tags": []
+}

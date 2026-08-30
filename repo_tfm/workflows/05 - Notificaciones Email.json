@@ -1,0 +1,104 @@
+{
+  "name": "05 - Notificaciones Email",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ee349329-eb3a-425f-b269-9d809fdcedfc",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "fromEmail": "alertas.bancasegura@gmail.com",
+        "toEmail": "={{ $json.email_responsable }}",
+        "subject": "=[{{ $json.prioridad }}] Vulnerabilidad detectada: {{ $json.cve_id }}",
+        "html": "=<h2>Alerta de Seguridad - BancaSegura S.A.</h2>\n<p><strong>CVE:</strong> {{ $json.cve_id }}</p>\n<p><strong>Grupo afectado:</strong> {{ $json.grupo }}</p>\n<p><strong>Equipo responsable:</strong> {{ $json.nombre_equipo }}</p>\n<p><strong>Prioridad:</strong> {{ $json.prioridad }}</p>\n<p><strong>Score:</strong> {{ $json.score_final }}/10</p>\n<p><strong>Justificación:</strong> {{ $json.justificacion }}</p>\n<hr>\n<p><em>Este es un mensaje automático generado por el sistema de gestión de vulnerabilidades de BancaSegura S.A.</em></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        432,
+        0
+      ],
+      "id": "dbf59b5b-e715-408d-be8a-2cb7b4039c47",
+      "name": "Send an Email",
+      "webhookId": "b5eb7fc0-bda9-42c8-8f70-282e811be0ff",
+      "credentials": {
+        "smtp": {
+          "id": "ZrJu2Z2HRZt9pCi2",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.cve_id, p.grupo, p.score_final, p.prioridad, p.justificacion, c.email_responsable, c.nombre_equipo\nFROM priorizacion_ia p\nLEFT JOIN contactos_grupos c ON p.grupo = c.grupo\nWHERE p.estado_remediacion = 'pendiente'\nORDER BY CAST(p.score_final AS NUMERIC) DESC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "2b431656-b84a-44e9-8cef-0d6f0de39561",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "1m4PHwiEBOPMGFHo",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6b4394fa-d067-48e2-aa77-3ed46a6793db",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75aadc027b3f989d0b06d7f1bf22776938771ecad4424597ad591f6d6e60303b"
+  },
+  "id": "LdA5plNYuvF7V02L",
+  "tags": []
+}

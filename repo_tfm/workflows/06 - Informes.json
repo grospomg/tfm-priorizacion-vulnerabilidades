@@ -1,0 +1,292 @@
+{
+  "name": "06 - Informes",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "96ee2339-cd44-4cb7-9e20-88b3ba899d95",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.cve_id, p.grupo, p.score_final, p.prioridad, p.justificacion, p.estado_remediacion, c.nombre_equipo,\n  (SELECT email_responsable FROM contactos_grupos WHERE grupo = 'DIRECCION') AS email_direccion\nFROM priorizacion_ia p\nLEFT JOIN contactos_grupos c ON p.grupo = c.grupo\nORDER BY CAST(p.score_final AS NUMERIC) DESC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "4e885918-25e2-40f4-8bd5-9c119a2645ed",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "1m4PHwiEBOPMGFHo",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst total = items.length;\nconst corregidas = items.filter(i => i.json.estado_remediacion === 'corregida').length;\nconst pendientes = items.filter(i => i.json.estado_remediacion === 'pendiente').length;\n\nconst filasTabla = items.map(item => {\n  const d = item.json;\n  const colorEstado = d.estado_remediacion === 'corregida' ? '#28a745' : '#dc3545';\n  const textoEstado = d.estado_remediacion === 'corregida' ? 'Corregida' : 'Pendiente';\n  return `<tr>\n    <td style=\"padding:8px;border:1px solid #ddd;\">${d.cve_id}</td>\n    <td style=\"padding:8px;border:1px solid #ddd;\">${d.prioridad}</td>\n    <td style=\"padding:8px;border:1px solid #ddd;\">${d.score_final}</td>\n    <td style=\"padding:8px;border:1px solid #ddd;\">${d.nombre_equipo || 'Sin asignar'}</td>\n    <td style=\"padding:8px;border:1px solid #ddd;color:${colorEstado};font-weight:bold;\">${textoEstado}</td>\n  </tr>`;\n}).join('');\n\nconst tablaHTML = `<table style=\"border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:13px;\">\n  <thead>\n    <tr style=\"background-color:#003366;color:white;\">\n      <th style=\"padding:10px;border:1px solid #ddd;\">CVE</th>\n      <th style=\"padding:10px;border:1px solid #ddd;\">Prioridad</th>\n      <th style=\"padding:10px;border:1px solid #ddd;\">Score</th>\n      <th style=\"padding:10px;border:1px solid #ddd;\">Equipo</th>\n      <th style=\"padding:10px;border:1px solid #ddd;\">Estado</th>\n    </tr>\n  </thead>\n  <tbody>${filasTabla}</tbody>\n</table>`;\n\nconst pendientesDetalle = items\n  .filter(i => i.json.estado_remediacion === 'pendiente')\n  .map(i => `${i.json.cve_id} (${i.json.nombre_equipo || 'sin asignar'})`)\n  .join(', ');\n\nconst prompt = `Eres un analista de ciberseguridad redactando un breve resumen ejecutivo para la dirección de BancaSegura S.A. (banco online).\nDATOS DEL ANÁLISIS:\n- Total vulnerabilidades críticas: ${total}\n- Corregidas: ${corregidas}\n- Pendientes: ${pendientes}\n- Vulnerabilidades que siguen pendientes: ${pendientesDetalle}\n\nRedacta un resumen ejecutivo BREVE (máximo 130 palabras, 2 párrafos) en español, claro y directo para dirección. Requisitos:\n- Menciona el progreso concreto (${corregidas} de ${total} corregidas).\n- Nombra específicamente qué equipos tienen vulnerabilidades aún pendientes y cuántas.\n- Da UNA recomendación concreta y accionable, no genérica.\nEvita frases vagas como \"mantener seguimiento constante\" o \"fortalecer procesos\". Sé específico. Responde solo con el texto, sin formato JSON.`;\n\nreturn [{ json: {\n  model: \"qwen2.5:7b\",\n  prompt: prompt,\n  stream: false,\n  tabla_html: tablaHTML,\n  total: total,\n  corregidas: corregidas,\n  pendientes: pendientes,\n  email_direccion: items[0].json.email_direccion\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "f72d29ee-8e3d-416e-b976-7b9fcbbc3672",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.1:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $json.model }}"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            },
+            {
+              "name": "stream",
+              "value": "={{ $json.stream }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 3600000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "31e3de4f-6bcb-4383-9c77-320f02353c12",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst primerCode = $('Code in JavaScript').first().json;\nreturn items.map(item => {\n  return { \n    json: { \n      informe: item.json.response,\n      tabla_html: primerCode.tabla_html,\n      total: primerCode.total,\n      corregidas: primerCode.corregidas,\n      pendientes: primerCode.pendientes,\n      email_direccion: primerCode.email_direccion\n    } \n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "3efcc0b9-7212-462f-9fa6-123e0e89577d",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "fromEmail": "alertas.bancasegura@gmail.com",
+        "toEmail": "={{ $json.email_direccion }}",
+        "subject": "Informe Ejecutivo de Ciberseguridad - BancaSegura S.A.",
+        "html": "=<div style=\"font-family:Arial,sans-serif;max-width:700px;margin:0 auto;\">\n  <h2 style=\"color:#003366;\">Informe Ejecutivo de Ciberseguridad</h2>\n  <p style=\"color:#666;\"><strong>BancaSegura S.A.</strong></p>\n  \n  <div style=\"display:flex;gap:10px;margin:20px 0;\">\n    <div style=\"flex:1;background:#003366;color:white;padding:15px;text-align:center;border-radius:5px;\">\n      <div style=\"font-size:28px;font-weight:bold;\">{{ $json.total }}</div>\n      <div style=\"font-size:12px;\">Total críticas</div>\n    </div>\n    <div style=\"flex:1;background:#28a745;color:white;padding:15px;text-align:center;border-radius:5px;\">\n      <div style=\"font-size:28px;font-weight:bold;\">{{ $json.corregidas }}</div>\n      <div style=\"font-size:12px;\">Corregidas</div>\n    </div>\n    <div style=\"flex:1;background:#dc3545;color:white;padding:15px;text-align:center;border-radius:5px;\">\n      <div style=\"font-size:28px;font-weight:bold;\">{{ $json.pendientes }}</div>\n      <div style=\"font-size:12px;\">Pendientes</div>\n    </div>\n  </div>\n\n  <p>{{ $json.informe.replace(/\\n/g, '<br>') }}</p>\n  \n  <h3 style=\"color:#003366;margin-top:30px;\">Detalle de vulnerabilidades</h3>\n  {{ $json.tabla_html }}\n  \n  <hr style=\"margin-top:30px;\">\n  <p style=\"font-size:11px;color:#999;\"><em>Informe generado automáticamente por el sistema de gestión de vulnerabilidades de BancaSegura S.A.</em></p>\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1696,
+        0
+      ],
+      "id": "c52cac0e-1744-4409-8a0c-de1300eba089",
+      "name": "Send an Email",
+      "webhookId": "914b3a06-6eb7-4690-8577-0e88ee9d5cf8",
+      "credentials": {
+        "smtp": {
+          "id": "ZrJu2Z2HRZt9pCi2",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst d = items[0].json;\n\nconst htmlCompleto = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"><style>\nbody { font-family: Arial, sans-serif; padding: 40px; color: #333; }\nh1 { color: #003366; }\ntable { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 20px; }\nth { background-color: #003366; color: white; padding: 8px; border: 1px solid #ddd; }\ntd { padding: 8px; border: 1px solid #ddd; }\n.resumen { margin: 20px 0; line-height: 1.5; }\n</style></head>\n<body>\n<h1>Informe Ejecutivo de Ciberseguridad</h1>\n<p><strong>BancaSegura S.A.</strong></p>\n<p>Total: ${d.total} | Corregidas: ${d.corregidas} | Pendientes: ${d.pendientes}</p>\n<div class=\"resumen\">${d.informe.replace(/\\n/g, '<br>')}</div>\n<h2>Detalle de vulnerabilidades</h2>\n${d.tabla_html}\n</body>\n</html>`;\n\nconst htmlBase64 = Buffer.from(htmlCompleto).toString('base64');\n\nreturn [{ json: {\n  html_base64: htmlBase64,\n  email_direccion: d.email_direccion,\n  informe: d.informe,\n  tabla_html: d.tabla_html,\n  total: d.total,\n  corregidas: d.corregidas,\n  pendientes: d.pendientes\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "8da88f21-4e3b-4912-bafa-48bc06a24b84",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://gotenberg:3000/forms/chromium/convert/html",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "files",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1456,
+        0
+      ],
+      "id": "4d58a81b-f61f-4593-9a37-ab48cb6b6e28",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "html_base64",
+        "options": {
+          "fileName": "index.html"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "d92719e0-05a2-4181-85ff-3b19e4754001",
+      "name": "Convert to File"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8ac0ba8c-9eed-4167-95a7-0629fa8d7ea7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75aadc027b3f989d0b06d7f1bf22776938771ecad4424597ad591f6d6e60303b"
+  },
+  "id": "IeNNeWfRev2Qbcak",
+  "tags": []
+}
